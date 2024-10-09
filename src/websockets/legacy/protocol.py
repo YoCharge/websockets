@@ -207,7 +207,7 @@ class WebSocketCommonProtocol(asyncio.Protocol):
         self.max_queue = max_queue
         self.read_limit = read_limit
         self.write_limit = write_limit
-
+        self._charger_serial = None
         # Unique identifier. For logs.
         self.id: uuid.UUID = uuid.uuid4()
         """Unique identifier of the connection. Useful in logs."""
@@ -307,6 +307,19 @@ class WebSocketCommonProtocol(asyncio.Protocol):
 
         # Task closing the TCP connection.
         self.close_connection_task: asyncio.Task[None]
+
+    @property
+    def charger_serial(self):
+        if self._charger_serial is None:
+            try:
+                self._charger_serial = self.path.split("/")[-1].lower()
+            except:
+                self._charger_serial = None
+        return self._charger_serial
+
+    @charger_serial.setter
+    def charger_serial(self, value):
+        self._charger_serial = value
 
     # Copied from asyncio.FlowControlMixin
     async def _drain_helper(self) -> None:  # pragma: no cover
@@ -851,7 +864,10 @@ class WebSocketCommonProtocol(asyncio.Protocol):
         pong_waiter = self.loop.create_future()
         # Resolution of time.monotonic() may be too low on Windows.
         ping_timestamp = time.perf_counter()
-        self.pings[data] = (pong_waiter, ping_timestamp)
+        if self.charger_serial:
+            self.pings[self.charger_serial] = (pong_waiter, ping_timestamp)
+        else:
+            self.pings[data] = (pong_waiter, ping_timestamp)
 
         await self.write_frame(True, OP_PING, data)
 
@@ -1124,8 +1140,9 @@ class WebSocketCommonProtocol(asyncio.Protocol):
                         pass
 
             elif frame.opcode == OP_PONG:
+                self.logger.debug(self.pings)
+                pong_timestamp = time.perf_counter()
                 if frame.data in self.pings:
-                    pong_timestamp = time.perf_counter()
                     # Sending a pong for only the most recent ping is legal.
                     # Acknowledge all previous pings too in that case.
                     ping_id = None
@@ -1142,6 +1159,12 @@ class WebSocketCommonProtocol(asyncio.Protocol):
                     # Remove acknowledged pings from self.pings.
                     for ping_id in ping_ids:
                         del self.pings[ping_id]
+
+                # hybrid ping pong
+                if self.charger_serial in self.pings:
+                    pong_waiter, ping_timestamp = self.pings[self.charger_serial]
+                    pong_waiter.set_result(pong_timestamp - ping_timestamp)
+                    del self.pings[self.charger_serial]
 
             # 5.6. Data Frames
             else:
@@ -1241,7 +1264,7 @@ class WebSocketCommonProtocol(asyncio.Protocol):
             while True:
                 await asyncio.sleep(self.ping_interval)
 
-                self.logger.debug("% sending keepalive ping")
+                self.logger.debug(f"sending keepalive ping to {self.charger_serial}")
                 pong_waiter = await self.ping()
 
                 if self.ping_timeout is not None:
@@ -1252,10 +1275,14 @@ class WebSocketCommonProtocol(asyncio.Protocol):
                             # Raises ConnectionClosed if the connection is lost,
                             # when connection_lost() calls abort_pings().
                             await pong_waiter
-                        self.logger.debug("% received keepalive pong")
+                        self.logger.debug(
+                            f"received keepalive pong from {self.charger_serial}"
+                        )
                     except asyncio.TimeoutError:
                         if self.debug:
-                            self.logger.debug("! timed out waiting for keepalive pong")
+                            self.logger.debug(
+                                f"! timed out waiting for keepalive pong from {self.charger_serial}"
+                            )
                         self.fail_connection(
                             CloseCode.INTERNAL_ERROR,
                             "keepalive ping timeout",
