@@ -1274,9 +1274,16 @@ class WebSocketCommonProtocol(asyncio.Protocol):
                             # when close_connection() cancels keepalive_ping().
                             # Raises ConnectionClosed if the connection is lost,
                             # when connection_lost() calls abort_pings().
-                            await pong_waiter
+                            latency = await pong_waiter
+                            try:
+                                str_latency = f"{latency*1000:.2f} ms"
+                            except Exception as e:
+                                self.logger.error(
+                                    f"error during converting latency {e}"
+                                )
+                                str_latency = ""
                         self.logger.debug(
-                            f"received keepalive pong from {self.charger_serial}"
+                            f"received keepalive pong from {self.charger_serial} ; {str_latency}"
                         )
                     except asyncio.TimeoutError:
                         if self.debug:
