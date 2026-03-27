@@ -315,6 +315,7 @@ class WebSocketCommonProtocol(asyncio.Protocol):
                 self._charger_serial = self.path.split("/")[-1].lower()
             except:
                 self._charger_serial = None
+        print("CHARGER-SERIAL: ", self._charger_serial, flush=True)
         return self._charger_serial
 
     @charger_serial.setter
@@ -1181,6 +1182,7 @@ class WebSocketCommonProtocol(asyncio.Protocol):
             max_size=max_size,
             extensions=self.extensions,
         )
+        print("< %s", frame, flush=True)
         if self.debug:
             self.logger.debug("< %s", frame)
         return frame
