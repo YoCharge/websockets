@@ -54,6 +54,17 @@ from .framing import Frame, prepare_ctrl, prepare_data
 __all__ = ["WebSocketCommonProtocol"]
 
 
+class ChargerLoggerAdapter(logging.LoggerAdapter):
+    def process(self, msg, kwargs):
+        extra = kwargs.get("extra", {})
+
+        extra["charger_id"] = getattr(self.extra.get("websocket"), "charger_serial", None)
+        extra["ws_id"] = str(self.extra.get("websocket").id)
+
+        kwargs["extra"] = extra
+        return msg, kwargs
+
+
 # In order to ensure consistency, the code always checks the current value of
 # WebSocketCommonProtocol.state before assigning a new value and never yields
 # between the check and the assignment.
@@ -215,7 +226,14 @@ class WebSocketCommonProtocol(asyncio.Protocol):
         # Logger or LoggerAdapter for this connection.
         if logger is None:
             logger = logging.getLogger("websockets.protocol")
-        self.logger: LoggerLike = logging.LoggerAdapter(logger, {"websocket": self})
+        # self.logger: LoggerLike = logging.LoggerAdapter(logger, {"websocket": self})
+        self.logger: LoggerLike = ChargerLoggerAdapter(
+            logger,
+            {
+                "websocket_id": str(self.id),
+                "charger_id": None,  # will be updated later
+            },
+        )
         """Logger for this connection."""
 
         # Track if DEBUG is enabled. Shortcut logging calls if it isn't.
@@ -315,9 +333,13 @@ class WebSocketCommonProtocol(asyncio.Protocol):
                 self._charger_serial = self.path.split("/")[-1].lower()
             except:
                 self._charger_serial = None
-        print("CHARGER-SERIAL: ", self._charger_serial, flush=True)
-        return self._charger_serial
 
+            # Inject into logger context
+            if self._charger_serial:
+                self.logger.extra["charger_id"] = self._charger_serial
+
+        return self._charger_serial
+    
     @charger_serial.setter
     def charger_serial(self, value):
         self._charger_serial = value
