@@ -58,12 +58,18 @@ class ChargerLoggerAdapter(logging.LoggerAdapter):
     def process(self, msg, kwargs):
         extra = kwargs.get("extra", {})
 
-        extra["charger_id"] = getattr(self.extra.get("websocket"), "charger_serial", None)
-        extra["ws_id"] = str(self.extra.get("websocket").id)
+        ws = self.extra.get("websocket")
+
+        if ws is not None:
+            # Safe access
+            extra["ws_id"] = str(getattr(ws, "id", None))
+            extra["charger_id"] = getattr(ws, "_charger_serial", None)
+        else:
+            extra["ws_id"] = None
+            extra["charger_id"] = None
 
         kwargs["extra"] = extra
         return msg, kwargs
-
 
 # In order to ensure consistency, the code always checks the current value of
 # WebSocketCommonProtocol.state before assigning a new value and never yields
