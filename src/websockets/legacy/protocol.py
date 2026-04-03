@@ -246,7 +246,7 @@ class WebSocketCommonProtocol(asyncio.Protocol):
         # :meth:`connection_open` to change the state to OPEN.
         self.state = State.CONNECTING
         if self.debug:
-            self.logger.debug(f"= connection is CONNECTING [{self.charger_serial}]")
+            self.logger.info(f"= connection is CONNECTING [{self.charger_serial}]")
 
         # HTTP protocol parameters.
         self.path: str
@@ -1273,8 +1273,9 @@ class WebSocketCommonProtocol(asyncio.Protocol):
         try:
             while True:
                 await asyncio.sleep(self.ping_interval)
-
-                self.logger.debug(f"sending keepalive ping to {self.charger_serial}")
+                
+                if self.debug:
+                    self.logger.info(f"sending keepalive ping to {self.charger_serial}")
                 pong_waiter = await self.ping()
 
                 if self.ping_timeout is not None:
@@ -1292,12 +1293,13 @@ class WebSocketCommonProtocol(asyncio.Protocol):
                                     f"error during converting latency {e}"
                                 )
                                 str_latency = ""
-                        self.logger.debug(
-                            f"received keepalive pong from {self.charger_serial} ; {str_latency}"
-                        )
+                        if self.debug:
+                            self.logger.info(
+                                f"received keepalive pong from {self.charger_serial} ; {str_latency}"
+                            )
                     except asyncio.TimeoutError:
                         if self.debug:
-                            self.logger.debug(
+                            self.logger.info(
                                 f"! timed out waiting for keepalive pong from {self.charger_serial}"
                             )
                         self.fail_connection(
@@ -1438,7 +1440,7 @@ class WebSocketCommonProtocol(asyncio.Protocol):
 
         """
         if self.debug:
-            self.logger.debug("! failing connection with code %d", code)
+            self.logger.info("! failing connection with code %d [%s]", code, self.charger_serial)
 
         # Cancel transfer_data_task if the opening handshake succeeded.
         # cancel() is idempotent and ignored if the task is done already.
@@ -1523,7 +1525,7 @@ class WebSocketCommonProtocol(asyncio.Protocol):
 
         """
         self.state = State.CLOSED
-        self.logger.debug("= connection is CLOSED")
+        self.logger.info(f"= connection is CLOSED [{self.charger_serial}]")
 
         self.abort_pings()
 
