@@ -246,7 +246,7 @@ class WebSocketCommonProtocol(asyncio.Protocol):
         # :meth:`connection_open` to change the state to OPEN.
         self.state = State.CONNECTING
         if self.debug:
-            self.logger.debug("= connection is CONNECTING")
+            self.logger.debug(f"= connection is CONNECTING [{self.charger_serial}]")
 
         # HTTP protocol parameters.
         self.path: str
@@ -308,11 +308,16 @@ class WebSocketCommonProtocol(asyncio.Protocol):
         # Task closing the TCP connection.
         self.close_connection_task: asyncio.Task[None]
 
+        # STATIC LIST OF CHARGERS TO DEBUG
+        self.chargers_to_debug = ["yosimulhome", "rcac2603012", "rcac2509005", "rcac2603012", "rcac2603018", "rcac2601003", "rcdc2603001"]
+
     @property
     def charger_serial(self):
         if self._charger_serial is None:
             try:
                 self._charger_serial = self.path.split("/")[-1].lower()
+                if self._charger_serial in self.chargers_to_debug:
+                    self.debug = True
             except:
                 self._charger_serial = None
         return self._charger_serial
@@ -360,8 +365,13 @@ class WebSocketCommonProtocol(asyncio.Protocol):
         # 4.1. The WebSocket Connection is Established.
         assert self.state is State.CONNECTING
         self.state = State.OPEN
-        if self.debug:
-            self.logger.debug("= connection is OPEN")
+
+        # if self.debug:
+        #     self.logger.info(f"= connection is OPEN [{self.charger_serial}]")
+
+        # Leaving it out intentionally to update debug flag
+        self.logger.info(f"= connection is OPEN [{self.charger_serial}]")
+
         # Start the task that receives incoming WebSocket messages.
         self.transfer_data_task = self.loop.create_task(self.transfer_data())
         # Start the task that sends pings at regular intervals.
@@ -1182,13 +1192,13 @@ class WebSocketCommonProtocol(asyncio.Protocol):
             extensions=self.extensions,
         )
         if self.debug:
-            self.logger.debug("< %s", frame)
+            self.logger.info("< %s [%s]", frame, self.charger_serial)
         return frame
 
     def write_frame_sync(self, fin: bool, opcode: int, data: bytes) -> None:
         frame = Frame(fin, Opcode(opcode), data)
         if self.debug:
-            self.logger.debug("> %s", frame)
+            self.logger.info("> %s [%s]", frame, self.charger_serial)
         frame.write(
             self.transport.write,
             mask=self.is_client,
@@ -1235,7 +1245,7 @@ class WebSocketCommonProtocol(asyncio.Protocol):
             # 7.1.3. The WebSocket Closing Handshake is Started
             self.state = State.CLOSING
             if self.debug:
-                self.logger.debug("= connection is CLOSING")
+                self.logger.info(f"= connection is CLOSING [{self.charger_serial}]")
 
             self.close_sent = close
             if self.close_rcvd is not None:
@@ -1331,12 +1341,12 @@ class WebSocketCommonProtocol(asyncio.Protocol):
                 if await self.wait_for_connection_lost():
                     return
                 if self.debug:
-                    self.logger.debug("! timed out waiting for TCP close")
+                    self.logger.info(f"! timed out waiting for TCP close [{self.charger_serial}]")
 
             # Half-close the TCP connection if possible (when there's no TLS).
             if self.transport.can_write_eof():
                 if self.debug:
-                    self.logger.debug("x half-closing TCP connection")
+                    self.logger.info(f"x half-closing TCP connection [{self.charger_serial}]")
                 # write_eof() doesn't document which exceptions it raises.
                 # "[Errno 107] Transport endpoint is not connected" happens
                 # but it isn't completely clear under which circumstances.
@@ -1349,7 +1359,7 @@ class WebSocketCommonProtocol(asyncio.Protocol):
                 if await self.wait_for_connection_lost():
                     return
                 if self.debug:
-                    self.logger.debug("! timed out waiting for TCP close")
+                    self.logger.info(f"! timed out waiting for TCP close [{self.charger_serial}]")
 
         finally:
             # The try/finally ensures that the transport never remains open,
@@ -1369,17 +1379,17 @@ class WebSocketCommonProtocol(asyncio.Protocol):
 
         # Close the TCP connection. Buffers are flushed asynchronously.
         if self.debug:
-            self.logger.debug("x closing TCP connection")
+            self.logger.info(f"x closing TCP connection [{self.charger_serial}]")
         self.transport.close()
 
         if await self.wait_for_connection_lost():
             return
         if self.debug:
-            self.logger.debug("! timed out waiting for TCP close")
+            self.logger.info(f"! timed out waiting for TCP close [{self.charger_serial}]")
 
         # Abort the TCP connection. Buffers are discarded.
         if self.debug:
-            self.logger.debug("x aborting TCP connection")
+            self.logger.info(f"x aborting TCP connection [{self.charger_serial}]")
         self.transport.abort()
 
         # connection_lost() is called quickly after aborting.
@@ -1452,7 +1462,7 @@ class WebSocketCommonProtocol(asyncio.Protocol):
 
             self.state = State.CLOSING
             if self.debug:
-                self.logger.debug("= connection is CLOSING")
+                self.logger.info(f"= connection is CLOSING [{self.charger_serial}]")
 
             # If self.close_rcvd was set, the connection state would be
             # CLOSING. Therefore self.close_rcvd isn't set and we don't
