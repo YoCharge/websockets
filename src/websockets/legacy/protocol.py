@@ -370,7 +370,7 @@ class WebSocketCommonProtocol(asyncio.Protocol):
         #     self.logger.info(f"= connection is OPEN [{self.charger_serial}]")
 
         # Leaving it out intentionally to update debug flag
-        self.logger.info(f"= connection is OPEN [{self.charger_serial}]")
+        self.logger.info(f"= connection is OPEN [{self.charger_serial}] [{self.id}]")
 
         # Start the task that receives incoming WebSocket messages.
         self.transfer_data_task = self.loop.create_task(self.transfer_data())
@@ -998,12 +998,22 @@ class WebSocketCommonProtocol(asyncio.Protocol):
 
         except asyncio.CancelledError as exc:
             self.transfer_data_exc = exc
+
+            if self.debug:
+                self.logger.info(
+                    "transfer_data cancelled [%s]", self.charger_serial, exc_info=True
+                )
             # If fail_connection() cancels this task, avoid logging the error
             # twice and failing the connection again.
             raise
 
         except ProtocolError as exc:
             self.transfer_data_exc = exc
+
+            if self.debug:
+                self.logger.info(
+                    "transfer_data protocol error [%s]", self.charger_serial, exc_info=True
+                )
             self.fail_connection(CloseCode.PROTOCOL_ERROR)
 
         except (ConnectionError, TimeoutError, EOFError, ssl.SSLError) as exc:
@@ -1015,10 +1025,20 @@ class WebSocketCommonProtocol(asyncio.Protocol):
             #   bytes are available than requested;
             # - ssl.SSLError if the other side infringes the TLS protocol.
             self.transfer_data_exc = exc
+            
+            if self.debug:
+                self.logger.info(
+                    "transfer_data connection lost, type=%s [%s]",
+                    type(exc).__name__, self.charger_serial, exc_info=True
+                )
             self.fail_connection(CloseCode.ABNORMAL_CLOSURE)
 
         except UnicodeDecodeError as exc:
             self.transfer_data_exc = exc
+            if self.debug:
+                self.logger.info(
+                    "transfer_data unicode error [%s]", self.charger_serial, exc_info=True
+                )
             self.fail_connection(CloseCode.INVALID_DATA)
 
         except PayloadTooBig as exc:
@@ -1030,6 +1050,11 @@ class WebSocketCommonProtocol(asyncio.Protocol):
             # regular circumstances are handled above. If it does, consider
             # catching and handling more exceptions.
             self.logger.error("data transfer failed", exc_info=True)
+            
+            if self.debug:
+                self.logger.info(
+                    "transfer_data unexpected error [%s]", self.charger_serial, exc_info=True
+                )
 
             self.transfer_data_exc = exc
             self.fail_connection(CloseCode.INTERNAL_ERROR)
@@ -1331,7 +1356,7 @@ class WebSocketCommonProtocol(asyncio.Protocol):
             # Half-close the TCP connection if possible (when there's no TLS).
             if self.transport.can_write_eof():
                 if self.debug:
-                    self.logger.info(f"x half-closing TCP connection [{self.charger_serial}]")
+                    self.logger.info(f"x half-closing TCP connection [{self.charger_serial}] [{self.id}]")
                 # write_eof() doesn't document which exceptions it raises.
                 # "[Errno 107] Transport endpoint is not connected" happens
                 # but it isn't completely clear under which circumstances.
