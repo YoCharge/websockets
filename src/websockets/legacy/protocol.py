@@ -309,7 +309,11 @@ class WebSocketCommonProtocol(asyncio.Protocol):
         self.close_connection_task: asyncio.Task[None]
 
         # STATIC LIST OF CHARGERS TO DEBUG
-        self.chargers_to_debug = ["yosimulhome", "rcac2603012", "rcac2509005", "rcac2603012", "rcac2603018", "rcac2601003", "rcdc2603001"]
+        self.chargers_to_debug = [
+            "yosimulhome", "rcac2603012", "rcac2509005", "rcac2603012",
+            "rcac2603018", "rcac2601003", "rcdc2603001", "rcdc2603005",
+            "spider_ngl_60kw_01", "rcdc2510006", "rcac2509015"
+        ]
 
     @property
     def charger_serial(self):
