@@ -1211,13 +1211,13 @@ class WebSocketCommonProtocol(asyncio.Protocol):
             extensions=self.extensions,
         )
         if self.debug:
-            self.logger.info("< %s [%s]", frame, self.charger_serial)
+            self.logger.info("< %s [%s] [%s]", frame, self.charger_serial, self.id)
         return frame
 
     def write_frame_sync(self, fin: bool, opcode: int, data: bytes) -> None:
         frame = Frame(fin, Opcode(opcode), data)
         if self.debug:
-            self.logger.info("> %s [%s]", frame, self.charger_serial)
+            self.logger.info("> %s [%s] [%s]", frame, self.charger_serial, self.id)
         frame.write(
             self.transport.write,
             mask=self.is_client,
