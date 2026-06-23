@@ -30,6 +30,12 @@ from .http11 import Request, Response
 from .streams import StreamReader
 from .typing import BytesLike, LoggerLike, Origin, Subprotocol
 
+import os
+import json
+from urllib.parse import parse_qs, urlsplit
+
+debug_chargers = json.loads(os.getenv("DEBUG_CHARGERS", "[]"))
+
 
 __all__ = [
     "Protocol",
@@ -110,6 +116,11 @@ class Protocol:
         # Connection side. CLIENT or SERVER.
         self.side = side
 
+        # STATIC LIST OF CHARGERS TO DEBUG
+        self.chargers_to_debug = debug_chargers
+        self._charger_serial = None
+        self.path: str | None = None
+
         # Connection state. Initially OPEN because subclasses handle CONNECTING.
         self.state = state
 
@@ -156,6 +167,36 @@ class Protocol:
         self.parser = self.parse()
         next(self.parser)  # start coroutine
         self.parser_exc: Exception | None = None
+        
+
+    @property
+    def charger_serial(self):
+        if self._charger_serial is None:
+            try:
+                if self.path is None:
+                    return None
+
+                parsed = urlsplit(self.path)
+                query = parse_qs(parsed.query)
+
+                for key in ("charger_id", "chargerId", "id"):
+                    values = query.get(key)
+                    if values and values[0]:
+                        self._charger_serial = values[0].lower()
+                        break
+                else:
+                    segments = [segment for segment in parsed.path.split("/") if segment]
+                    self._charger_serial = segments[-1].lower() if segments else None
+
+                if self._charger_serial in self.chargers_to_debug:
+                    self.debug = True
+            except Exception:
+                self._charger_serial = None
+        return self._charger_serial
+
+    @charger_serial.setter
+    def charger_serial(self, value):
+        self._charger_serial = value
 
     @property
     def state(self) -> State:
@@ -175,7 +216,8 @@ class Protocol:
     @state.setter
     def state(self, state: State) -> None:
         if self.debug:
-            self.logger.debug("= connection is %s", state.name)
+            self.logger.info("= connection is %s [%s] [%s]", state.name, self.charger_serial, self.id)
+            
         self._state = state
 
     @property
@@ -574,7 +616,7 @@ class Protocol:
             while True:
                 if (yield from self.reader.at_eof()):
                     if self.debug:
-                        self.logger.debug("< EOF")
+                        self.logger.info(f"< EOF [{self.charger_serial}] [{self.id}]")
                     # If the WebSocket connection is closed cleanly, with a
                     # closing handhshake, recv_frame() substitutes parse()
                     # with discard(). This branch is reached only when the
@@ -606,7 +648,7 @@ class Protocol:
                 )
 
                 if self.debug:
-                    self.logger.debug("< %s", frame)
+                    self.logger.info("< %s [%s] [%s]", frame, self.charger_serial, self.id)
 
                 self.recv_frame(frame)
 
@@ -656,7 +698,7 @@ class Protocol:
         while not (yield from self.reader.at_eof()):
             self.reader.discard()
         if self.debug:
-            self.logger.debug("< EOF")
+            self.logger.info("< EOF [%s] [%s]", self.charger_serial, self.id)
         # A server closes the TCP connection immediately, while a client
         # waits for the server to close the TCP connection.
         if self.side is CLIENT and self.state is not CONNECTING:
@@ -752,7 +794,7 @@ class Protocol:
 
     def send_frame(self, frame: Frame) -> None:
         if self.debug:
-            self.logger.debug("> %s", frame)
+            self.logger.info("> %s [%s] [%s]", frame, self.charger_serial, self.id)
         self.writes.append(
             frame.serialize(
                 mask=self.side is CLIENT,
@@ -764,5 +806,5 @@ class Protocol:
         assert not self.eof_sent
         self.eof_sent = True
         if self.debug:
-            self.logger.debug("> EOF")
+            self.logger.info("> EOF [%s] [%s]", self.charger_serial, self.id)
         self.writes.append(SEND_EOF)

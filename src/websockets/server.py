@@ -132,6 +132,8 @@ class ServerProtocol(Protocol):
             WebSocket handshake response or HTTP response to send to the client.
 
         """
+        self.path = request.path
+        
         try:
             (
                 accept_header,
