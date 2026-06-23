@@ -119,7 +119,7 @@ class Protocol:
         # STATIC LIST OF CHARGERS TO DEBUG
         self.chargers_to_debug = debug_chargers
         self._charger_serial = None
-        self.path: str | None = None
+        self._path: str | None = None
 
         # Connection state. Initially OPEN because subclasses handle CONNECTING.
         self.state = state
@@ -167,18 +167,19 @@ class Protocol:
         self.parser = self.parse()
         next(self.parser)  # start coroutine
         self.parser_exc: Exception | None = None
-        
+
 
     @property
-    def charger_serial(self):
-        if self._charger_serial is None:
+    def path(self) -> str | None:
+        return self._path
+
+    @path.setter
+    def path(self, value: str | None) -> None:
+        self._path = value
+        if value is not None:
             try:
-                if self.path is None:
-                    return None
-
-                parsed = urlsplit(self.path)
+                parsed = urlsplit(value)
                 query = parse_qs(parsed.query)
-
                 for key in ("charger_id", "chargerId", "id"):
                     values = query.get(key)
                     if values and values[0]:
@@ -187,15 +188,17 @@ class Protocol:
                 else:
                     segments = [segment for segment in parsed.path.split("/") if segment]
                     self._charger_serial = segments[-1].lower() if segments else None
-
                 if self._charger_serial in self.chargers_to_debug:
                     self.debug = True
             except Exception:
                 self._charger_serial = None
+
+    @property
+    def charger_serial(self) -> str | None:
         return self._charger_serial
 
     @charger_serial.setter
-    def charger_serial(self, value):
+    def charger_serial(self, value: str | None) -> None:
         self._charger_serial = value
 
     @property
