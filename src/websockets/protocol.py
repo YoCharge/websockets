@@ -214,6 +214,8 @@ class Protocol:
         .. _7.1.4: https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.4
 
         """
+        if self.debug:
+            self.logger.info("[STATE] %s [%s] [%s]", self._state, self.charger_serial, self.id)
         return self._state
 
     @state.setter
@@ -718,6 +720,9 @@ class Protocol:
         Process an incoming frame.
 
         """
+        if self.debug:
+            self.logger.info(" < [OPCODE] %s [%s] [%s]", frame.opcode, self.charger_serial, self.id)
+        
         if frame.opcode is OP_TEXT or frame.opcode is OP_BINARY:
             if self.current_size is not None:
                 raise ProtocolError("expected a continuation frame")
