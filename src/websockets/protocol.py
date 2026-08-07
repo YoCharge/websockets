@@ -34,8 +34,6 @@ import os
 import json
 from urllib.parse import parse_qs, urlsplit
 
-debug_chargers = json.loads(os.getenv("DEBUG_CHARGERS", "[]"))
-
 
 __all__ = [
     "Protocol",
@@ -117,7 +115,6 @@ class Protocol:
         self.side = side
 
         # STATIC LIST OF CHARGERS TO DEBUG
-        self.chargers_to_debug = debug_chargers
         self._charger_serial = None
         self._path: str | None = None
 
@@ -188,8 +185,6 @@ class Protocol:
                 else:
                     segments = [segment for segment in parsed.path.split("/") if segment]
                     self._charger_serial = segments[-1].lower() if segments else None
-                if self._charger_serial in self.chargers_to_debug:
-                    self.debug = True
             except Exception:
                 self._charger_serial = None
 
